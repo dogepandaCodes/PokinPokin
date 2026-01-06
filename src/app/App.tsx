@@ -10,6 +10,7 @@ import { LocationsSection } from './components/LocationsSection';
 import logo from '../assets/logo.png';
 import 'slick-carousel/slick/slick.css';
 import 'slick-carousel/slick/slick-theme.css';
+import { supabase } from '../lib/supabaseClient';
 
 interface User {
   email: string;
@@ -94,6 +95,10 @@ function App() {
   const handleCloseQRCode = () => {
     setShowQRCodeDialog(false);
   };
+console.log('Supabase URL from App:', import.meta.env.VITE_SUPABASE_URL);
+console.log('VITE_ENV_TEST:', import.meta.env.VITE_ENV_TEST);
+console.log('SUPABASE URL:', import.meta.env.VITE_SUPABASE_URL);
+
 
   return (
     <div className="min-h-screen bg-white">
