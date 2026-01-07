@@ -32,26 +32,86 @@ function App() {
     return lastClaimDate === today;
   };
 
-  const handleLogin = (email: string, password: string) => {
-    // Mock login - in a real app, this would authenticate with a backend
-    // For demo purposes, create a user with initial points and coins
-    const newUser = {
-      email: email,
-      points: 150,
-      coins: 50,
-    };
-    setUser(newUser);
-    setShowLoginDialog(false);
 
-    // Check if user has already claimed today's token
-    const hasClaimedToday = checkDailyTokenClaim(email);
-    if (!hasClaimedToday) {
-      // Show daily token dialog after a short delay
-      setTimeout(() => {
-        setShowDailyTokenDialog(true);
-      }, 500);
+useEffect(() => {
+  // Restore session on app start (refresh/first load)
+  const restoreSession = async () => {
+    const { data, error } = await supabase.auth.getSession();
+
+    if (error) {
+      console.error('Failed to get session:', error.message);
+      return;
+    }
+
+    const sessionUser = data.session?.user;
+
+    // If a session exists, restore user state so UI stays "logged in"
+    if (sessionUser) {
+      setUser({
+        email: sessionUser.email ?? '',
+        points: 150, // Temporary data
+        coins: 50,   // Temporary data
+      });
     }
   };
+
+  restoreSession();
+
+  // Listen for auth state changes (login/logout/token refresh)
+  const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+    const sessionUser = session?.user;
+
+    if (sessionUser) {
+      setUser({
+        email: sessionUser.email ?? '',
+        points: 150, // Temporary data
+        coins: 50,   // Temporary data
+      });
+    } else {
+      // No session means logged out
+      setUser(null);
+    }
+  });
+
+  // Cleanup subscription on unmount
+  return () => {
+    listener.subscription.unsubscribe();
+  };
+  }, []);
+
+  const handleLogin = async(email: string, password: string) => {
+    const { data, error} = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    
+    if(error){
+      console.error('Supabase login failed:', error.message);
+      return;
+    }
+    
+    const authUser = data.user;
+    if(!authUser){
+      console.error('login success but no user returned');
+      return;
+    }
+
+    console.log('Supabase login success:', authUser.email);
+
+    setUser({
+      email: authUser.email ?? email,
+      points: 150,
+      coins: 50,
+    });
+
+    setShowLoginDialog(false);
+
+    const hasClaimedToday = checkDailyTokenClaim(authUser.email ?? email);
+    if (!hasClaimedToday) {
+      setTimeout(() => setShowDailyTokenDialog(true), 500);
+    }
+  };
+
 
   const handleClaimDailyToken = () => {
     if (user) {
@@ -76,9 +136,11 @@ function App() {
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     setUser(null);
   };
+
 
   const handleLoginClick = () => {
     setShowLoginDialog(true);
@@ -95,9 +157,7 @@ function App() {
   const handleCloseQRCode = () => {
     setShowQRCodeDialog(false);
   };
-console.log('Supabase URL from App:', import.meta.env.VITE_SUPABASE_URL);
-console.log('VITE_ENV_TEST:', import.meta.env.VITE_ENV_TEST);
-console.log('SUPABASE URL:', import.meta.env.VITE_SUPABASE_URL);
+
 
 
   return (
