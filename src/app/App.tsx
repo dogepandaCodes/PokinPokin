@@ -13,6 +13,7 @@ import 'slick-carousel/slick/slick-theme.css';
 import { supabase } from '../lib/supabaseClient';
 
 interface User {
+  id : string;
   email: string;
   points: number;
   coins: number;
@@ -33,6 +34,20 @@ function App() {
   };
 
 
+  const fetchProfile = async (userId: string) => {
+    const {data,error} = await supabase
+      .from('profiles')
+      .select('id,email,points,coins')
+      .eq('id', userId)
+      .single();
+
+    if(error){
+      console.error('Failed to fetch profile:', error.message);
+      return null;
+    }
+    return data as  User;
+  };
+
 useEffect(() => {
   // Restore session on app start (refresh/first load)
   const restoreSession = async () => {
@@ -47,11 +62,8 @@ useEffect(() => {
 
     // If a session exists, restore user state so UI stays "logged in"
     if (sessionUser) {
-      setUser({
-        email: sessionUser.email ?? '',
-        points: 150, // Temporary data
-        coins: 50,   // Temporary data
-      });
+       const profile = await fetchProfile(sessionUser.id);
+       if (profile) setUser(profile);
     }
   };
 
@@ -62,13 +74,11 @@ useEffect(() => {
     const sessionUser = session?.user;
 
     if (sessionUser) {
-      setUser({
-        email: sessionUser.email ?? '',
-        points: 150, // Temporary data
-        coins: 50,   // Temporary data
+      fetchProfile(sessionUser.id).then((profile) => {
+        if (profile) setUser(profile);
       });
-    } else {
-      // No session means logged out
+    }
+    else {
       setUser(null);
     }
   });
@@ -98,11 +108,19 @@ useEffect(() => {
 
     console.log('Supabase login success:', authUser.email);
 
-    setUser({
-      email: authUser.email ?? email,
-      points: 150,
-      coins: 50,
-    });
+    const profile = await fetchProfile(authUser.id);
+
+    if(profile){
+      setUser(profile);
+    }
+    else{
+      setUser({
+        id: authUser.id,
+        email: authUser.email ?? email,
+        points: 150,
+        coins: 50,
+      });
+    }
 
     setShowLoginDialog(false);
 
@@ -113,19 +131,28 @@ useEffect(() => {
   };
 
 
-  const handleClaimDailyToken = () => {
-    if (user) {
-      // Add 1 token (coin) to user's account
-      setUser({
-        ...user,
-        coins: user.coins + 1,
-      });
+  const handleClaimDailyToken = async () => {
+    if(!user) return;
 
-      // Save claim date to localStorage
-      const today = new Date().toDateString();
-      localStorage.setItem(`lastTokenClaim_${user.email}`, today);
+    // Increment coins in the database for the current user
+    const {error} = await supabase.from('profiles')
+      .update({ coins: user.coins + 1})
+      .eq('id', user.id);
+    
+    if(error){
+      console.error('Failed to claim daily token:', error.message);
+      return;
     }
-  };
+
+    // Re-fetch profile to sync UI with the database
+    const update = await fetchProfile(user.id);
+    if (update) setUser(update);
+
+    // Save claim date to localStorage (keeps your "once per day" UX)
+    const today = new Date().toDateString();
+    localStorage.setItem(`lastTokenClaim_${user.email}`, today);
+
+  }
 
   const handleCloseDailyToken = () => {
     setShowDailyTokenDialog(false);
