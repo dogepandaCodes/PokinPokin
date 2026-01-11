@@ -11,6 +11,7 @@ import logo from '../assets/logo.png';
 import 'slick-carousel/slick/slick.css';
 import 'slick-carousel/slick/slick-theme.css';
 import { supabase } from '../lib/supabaseClient';
+import { PaymentSuccess } from './components/PaymentSuccess';
 
 interface User {
   id : string;
@@ -185,7 +186,9 @@ useEffect(() => {
     setShowQRCodeDialog(false);
   };
 
-
+  if (window.location.pathname === '/payment-success') {
+    return <PaymentSuccess />;
+  }
 
   return (
     <div className="min-h-screen bg-white">
@@ -195,7 +198,7 @@ useEffect(() => {
       <DailyTokenDialog open={showDailyTokenDialog} onClose={handleCloseDailyToken} onClaim={handleClaimDailyToken} />
       <HeroSection />
       <div id="pricing">
-        <PricingSection />
+        <PricingSection user={user} onLoginClick={handleLoginClick} />
       </div>
       <div id="prizes">
         <PrizesSection />
