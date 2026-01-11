@@ -13,11 +13,14 @@ import 'slick-carousel/slick/slick-theme.css';
 import { supabase } from '../lib/supabaseClient';
 
 interface User {
-  id : string;
+  id: string;
   email: string;
+  username: string | null;
+  phone: string | null;
   points: number;
   coins: number;
 }
+
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -108,19 +111,21 @@ useEffect(() => {
 
     console.log('Supabase login success:', authUser.email);
 
-    const profile = await fetchProfile(authUser.id);
-
-    if(profile){
-      setUser(profile);
-    }
-    else{
-      setUser({
-        id: authUser.id,
-        email: authUser.email ?? email,
-        points: 150,
-        coins: 50,
-      });
-    }
+    const fetchProfile = async (userId: string) => {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("id,email,username,phone,points,coins")
+        .eq("id", userId)
+        .single();
+    
+      if (error) {
+        console.error("Failed to fetch profile:", error.message);
+        return null;
+      }
+    
+      return data as User;
+    };
+    
 
     setShowLoginDialog(false);
 
