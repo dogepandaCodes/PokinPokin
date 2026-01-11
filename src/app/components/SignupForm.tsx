@@ -77,7 +77,7 @@ export default function SignupForm({ onSuccess }: SignupFormProps) {
 
       <input
         type="tel"
-        placeholder="Phone (digits only, e.g. 2498724158)"
+        placeholder="Phone (digits only, e.g. 1234567890)"
         value={phone}
         onChange={(e) => setPhone(digitsOnly(e.target.value))}
         inputMode="numeric"
