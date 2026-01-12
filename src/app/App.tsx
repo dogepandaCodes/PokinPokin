@@ -11,6 +11,8 @@ import logo from '../assets/logo.png';
 import 'slick-carousel/slick/slick.css';
 import 'slick-carousel/slick/slick-theme.css';
 import { supabase } from '../lib/supabaseClient';
+import { AuthRecoveryPage } from "./components/AuthRecoveryPage";
+
 
 interface User {
   id: string;
@@ -23,6 +25,10 @@ interface User {
 
 
 function App() {
+  if (window.location.pathname === "/auth/recovery") {
+    return <AuthRecoveryPage />;
+  }
+
   const [user, setUser] = useState<User | null>(null);
   const [showLoginDialog, setShowLoginDialog] = useState(false);
   const [showQRCodeDialog, setShowQRCodeDialog] = useState(false);
