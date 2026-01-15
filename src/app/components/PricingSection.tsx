@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
-import { Coins, Sparkles, Zap, Crown } from 'lucide-react';
+import { Coins, Sparkles, Zap, Crown, Loader2 } from 'lucide-react';
 
 interface PricingTier {
   id: string;
@@ -11,6 +11,16 @@ interface PricingTier {
   bonus: number;
   icon: React.ReactNode;
   popular?: boolean;
+}
+
+interface PricingSectionProps {
+  user: {
+    id: string;
+    email: string;
+    points: number;
+    coins: number;
+  } | null;
+  onLoginClick: () => void;
 }
 
 const pricingTiers: PricingTier[] = [
@@ -49,9 +59,46 @@ const pricingTiers: PricingTier[] = [
   },
 ];
 
-export function PricingSection() {
-  const handlePurchase = (tier: PricingTier) => {
-    alert(`Purchase ${tier.name} for $${tier.price} - This would connect to payment processing!`);
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+export function PricingSection({ user, onLoginClick }: PricingSectionProps) {
+  const [loadingTier, setLoadingTier] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handlePurchase = async (tier: PricingTier) => {
+    setError(null);
+
+    if (!user) {
+      onLoginClick();
+      return;
+    }
+
+    setLoadingTier(tier.id);
+
+    try {
+      const response = await fetch(`${API_URL}/create-checkout-session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          packageId: tier.id,
+          userId: user.id,
+          userEmail: user.email,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create checkout session');
+      }
+
+      window.location.href = data.url;
+    } catch (err) {
+      console.error('Purchase error:', err);
+      setError(err instanceof Error ? err.message : 'Something went wrong');
+    } finally {
+      setLoadingTier(null);
+    }
   };
 
   return (
@@ -62,7 +109,18 @@ export function PricingSection() {
           <p className="text-muted-foreground">
             Get more coins and earn bonus points with larger packages!
           </p>
+          {!user && (
+            <p className="text-sm text-purple-600 mt-2">
+              Please log in to purchase coins
+            </p>
+          )}
         </div>
+
+        {error && (
+          <div className="max-w-md mx-auto mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-center">
+            {error}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {pricingTiers.map((tier) => (
@@ -95,8 +153,18 @@ export function PricingSection() {
                   onClick={() => handlePurchase(tier)}
                   className="w-full"
                   variant={tier.popular ? 'default' : 'outline'}
+                  disabled={loadingTier !== null}
                 >
-                  Purchase
+                  {loadingTier === tier.id ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Processing...
+                    </>
+                  ) : !user ? (
+                    'Login to Purchase'
+                  ) : (
+                    'Purchase'
+                  )}
                 </Button>
               </CardContent>
             </Card>
