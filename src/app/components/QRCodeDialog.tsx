@@ -28,7 +28,7 @@ export function QRCodeDialog({ open, onClose, user }: QRCodeDialogProps) {
           <div className="bg-white p-6 rounded-lg border-4 border-purple-500 shadow-lg">
             {user ? (
               <QRCodeSVG
-                value={`pokinpokin://user/${user.email}`}
+                value={user.id}
                 size={200}
                 level="H"
                 includeMargin={true}
