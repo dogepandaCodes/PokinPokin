@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { CheckCircle, XCircle, Loader2, Coins } from 'lucide-react';
 import { Button } from './ui/button';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
 
 export function PaymentSuccess() {
   const [status, setStatus] = useState<'loading' | 'success' | 'error'>('loading');
@@ -19,7 +19,7 @@ export function PaymentSuccess() {
       }
 
       try {
-        const response = await fetch(`${API_URL}/verify-payment/${sessionId}`);
+        const response = await fetch(`/api/verify-payment/${sessionId}`);
         const data = await response.json();
 
         if (data.success) {

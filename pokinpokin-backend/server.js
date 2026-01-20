@@ -55,7 +55,7 @@ app.use(cors({
 }));
 
 // Webhook endpoint needs raw body - must be before express.json()
-app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+app.post('/api/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
   const sig = req.headers['stripe-signature'];
   let event;
 
@@ -89,7 +89,7 @@ app.post('/webhook', express.raw({ type: 'application/json' }), async (req, res)
 app.use(express.json());
 
 // Create Checkout Session
-app.post('/create-checkout-session', async (req, res) => {
+app.post('/api/create-checkout-session', async (req, res) => {
   const { packageId, userId, userEmail } = req.body;
 
   // Validate package
@@ -138,7 +138,7 @@ app.post('/create-checkout-session', async (req, res) => {
 });
 
 // Verify payment status (for success page)
-app.get('/verify-payment/:sessionId', async (req, res) => {
+app.get('/api/verify-payment/:sessionId', async (req, res) => {
   const { sessionId } = req.params;
 
   try {
@@ -221,7 +221,7 @@ async function handleSuccessfulPayment(session) {
 }
 
 // Health check
-app.get('/health', (req, res) => {
+app.get('/api/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
