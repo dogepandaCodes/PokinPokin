@@ -59,7 +59,7 @@ const pricingTiers: PricingTier[] = [
   },
 ];
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+const API_URL = import.meta.env.VITE_API_URL ?? 'http://localhost:3001';
 
 export function PricingSection({ user, onLoginClick }: PricingSectionProps) {
   const [loadingTier, setLoadingTier] = useState<string | null>(null);
@@ -76,7 +76,7 @@ export function PricingSection({ user, onLoginClick }: PricingSectionProps) {
     setLoadingTier(tier.id);
 
     try {
-      const response = await fetch(`${API_URL}/create-checkout-session`, {
+      const response = await fetch(`/api/create-checkout-session`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
