@@ -1,6 +1,5 @@
 import Stripe from 'stripe';
 import { createClient } from '@supabase/supabase-js';
-import { buffer } from 'micro';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 const supabase = createClient(
@@ -8,26 +7,36 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY
 );
 
-// Disable body parsing - we need raw body for Stripe signature verification
+// Disable body parsing - Stripe needs raw body for signature verification
 export const config = {
   api: {
     bodyParser: false,
   },
 };
 
+// Helper to get raw body without 'micro' package
+async function getRawBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', (chunk) => chunks.push(chunk));
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+    req.on('error', reject);
+  });
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const buf = await buffer(req);
+  const rawBody = await getRawBody(req);
   const sig = req.headers['stripe-signature'];
 
   let event;
 
   try {
     event = stripe.webhooks.constructEvent(
-      buf,
+      rawBody,
       sig,
       process.env.STRIPE_WEBHOOK_SECRET
     );
@@ -58,7 +67,7 @@ async function handleSuccessfulPayment(session) {
   const coins = parseInt(session.metadata?.coins) || 0;
   const bonus = parseInt(session.metadata?.bonus) || 0;
   const totalCoins = coins + bonus;
-  const amountPaid = session.amount_total || 0;
+  const amountPaid = session.amount_total / 100 || 0;
 
   console.log(`Processing payment - userId: ${userId}, coins: ${coins}, bonus: ${bonus}, total: ${totalCoins}, amount: ${amountPaid}`);
 
