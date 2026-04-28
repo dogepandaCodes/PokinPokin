@@ -17,113 +17,107 @@ interface HeaderProps {
 
 export function Header({ user, onLogout, onLoginClick, onQRCodeClick }: HeaderProps) {
   const [isPlaying, setIsPlaying] = React.useState(false);
-  const [rotation, setRotation] = React.useState(0);
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
+  const imgRef = React.useRef<HTMLImageElement | null>(null);
   const animationRef = React.useRef<number | null>(null);
-  const startTimeRef = React.useRef<number>(0);
-  const lastRotationRef = React.useRef<number>(0);
-  // Use a ref instead of state so the rAF loop always reads the current value (no stale closure)
+  const rotationRef = React.useRef<number>(0);
+  const lastTimestampRef = React.useRef<number | null>(null);
   const isSpinningRef = React.useRef<boolean>(false);
 
-  const animateSpin = React.useCallback((timestamp: number) => {
-    if (!startTimeRef.current) startTimeRef.current = timestamp;
-    const elapsed = timestamp - startTimeRef.current;
-    const newRotation = lastRotationRef.current + (elapsed / 2000) * 360;
-    setRotation(newRotation);
+  // Degrees per millisecond at full speed (180 deg/sec)
+  const SPEED = 180 / 1000;
+
+  const applyRotation = (deg: number) => {
+    rotationRef.current = deg;
+    if (imgRef.current) {
+      imgRef.current.style.transform = `rotate(${deg}deg)`;
+    }
+  };
+
+  const spinLoop = (timestamp: number) => {
+    if (lastTimestampRef.current === null) {
+      lastTimestampRef.current = timestamp;
+    }
+    const delta = timestamp - lastTimestampRef.current;
+    lastTimestampRef.current = timestamp;
+    applyRotation(rotationRef.current + delta * SPEED);
 
     if (isSpinningRef.current) {
-      animationRef.current = requestAnimationFrame(animateSpin);
+      animationRef.current = requestAnimationFrame(spinLoop);
     }
-  }, []);
+  };
 
-  const stopSpinToOrigin = React.useCallback(() => {
-    // Read from the ref, not state — state is batched and can be many frames stale
-    const currentRotation = lastRotationRef.current;
-    const nextMultiple = Math.ceil(currentRotation / 360) * 360;
-    const remaining = nextMultiple - currentRotation;
-
-    if (remaining <= 0) {
-      lastRotationRef.current = nextMultiple;
-      setRotation(nextMultiple);
-      return;
-    }
-
-    const duration = (remaining / 360) * 2000;
-    const startRotation = currentRotation;
-    const startTime = performance.now();
-
-    const finishSpin = (timestamp: number) => {
-      const elapsed = timestamp - startTime;
-      const progress = Math.min(elapsed / duration, 1);
-      const easeProgress = 1 - Math.pow(1 - progress, 3);
-      const currentRot = startRotation + remaining * easeProgress;
-
-      lastRotationRef.current = currentRot;
-      setRotation(currentRot);
-
-      if (progress < 1) {
-        animationRef.current = requestAnimationFrame(finishSpin);
-      } else {
-        lastRotationRef.current = nextMultiple;
-        setRotation(nextMultiple);
-        animationRef.current = null;
-      }
-    };
-
-    animationRef.current = requestAnimationFrame(finishSpin);
-  }, []);
-
-  const stopSpinning = React.useCallback(() => {
-    isSpinningRef.current = false;
+  const stopSpinToOrigin = () => {
     if (animationRef.current) {
       cancelAnimationFrame(animationRef.current);
       animationRef.current = null;
     }
-    stopSpinToOrigin();
-  }, [stopSpinToOrigin]);
+
+    const current = rotationRef.current;
+    const nextFull = Math.ceil(current / 360) * 360;
+    const remaining = nextFull - current;
+
+    if (remaining <= 0) {
+      applyRotation(nextFull);
+      return;
+    }
+
+    // Ease out over the remaining arc
+    const duration = (remaining / 360) * (1000 / SPEED) * 0.4; // faster decel
+    const startRotation = current;
+    const startTime = performance.now();
+
+    const finish = (ts: number) => {
+      const elapsed = ts - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      applyRotation(startRotation + remaining * eased);
+      if (progress < 1) {
+        animationRef.current = requestAnimationFrame(finish);
+      } else {
+        applyRotation(nextFull);
+        animationRef.current = null;
+      }
+    };
+
+    animationRef.current = requestAnimationFrame(finish);
+  };
 
   const handleLogoClick = () => {
     if (isPlaying) {
       audioRef.current?.pause();
       if (audioRef.current) audioRef.current.currentTime = 0;
       setIsPlaying(false);
-      stopSpinning();
+      isSpinningRef.current = false;
+      stopSpinToOrigin();
     } else {
       if (!audioRef.current) {
-        audioRef.current = new Audio();
-        audioRef.current.src = bgMusic;
+        audioRef.current = new Audio(bgMusic);
         audioRef.current.loop = true;
-
         audioRef.current.addEventListener('ended', () => {
           setIsPlaying(false);
-          stopSpinning();
+          isSpinningRef.current = false;
+          stopSpinToOrigin();
         });
       }
-
       audioRef.current.currentTime = 0;
-      audioRef.current?.play().catch(err => console.log('Audio play failed:', err));
+      audioRef.current.play().catch(err => console.log('Audio play failed:', err));
       setIsPlaying(true);
 
-      // Cancel any in-progress deceleration before starting fresh
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
         animationRef.current = null;
       }
       isSpinningRef.current = true;
-      startTimeRef.current = 0;
-      animationRef.current = requestAnimationFrame(animateSpin);
+      lastTimestampRef.current = null;
+      animationRef.current = requestAnimationFrame(spinLoop);
     }
   };
 
-  // Cleanup on unmount
   React.useEffect(() => {
     return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
+      audioRef.current?.pause();
+      if (animationRef.current) cancelAnimationFrame(animationRef.current);
     };
   }, []);
 
@@ -133,15 +127,13 @@ export function Header({ user, onLogout, onLoginClick, onQRCodeClick }: HeaderPr
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2 md:gap-3">
             <div className="w-20 h-20 md:w-28 md:h-28 flex items-center justify-center flex-shrink-0">
-              <img 
-                src={logo} 
-                alt="PokinPokin Logo" 
+              <img
+                ref={imgRef}
+                src={logo}
+                alt="PokinPokin Logo"
                 className="w-full h-full object-cover rounded-full cursor-pointer transition-transform hover:scale-110"
                 onClick={handleLogoClick}
-                style={{ 
-                  transform: `rotate(${rotation}deg)`,
-                  aspectRatio: '1 / 1'
-                }}
+                style={{ willChange: 'transform' }}
               />
             </div>
             <div className="hidden md:block">
