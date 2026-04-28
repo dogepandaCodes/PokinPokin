@@ -18,123 +18,100 @@ interface HeaderProps {
 export function Header({ user, onLogout, onLoginClick, onQRCodeClick }: HeaderProps) {
   const [isPlaying, setIsPlaying] = React.useState(false);
   const [rotation, setRotation] = React.useState(0);
-  const [isSpinning, setIsSpinning] = React.useState(false);
   const audioRef = React.useRef<HTMLAudioElement | null>(null);
   const animationRef = React.useRef<number | null>(null);
   const startTimeRef = React.useRef<number>(0);
   const lastRotationRef = React.useRef<number>(0);
+  // Use a ref instead of state so the rAF loop always reads the current value (no stale closure)
+  const isSpinningRef = React.useRef<boolean>(false);
 
-  const animateSpin = (timestamp: number) => {
+  const animateSpin = React.useCallback((timestamp: number) => {
     if (!startTimeRef.current) startTimeRef.current = timestamp;
     const elapsed = timestamp - startTimeRef.current;
-    
-    // 2 seconds per rotation = 180 degrees per second
-    // Don't use modulo - let rotation keep increasing
     const newRotation = lastRotationRef.current + (elapsed / 2000) * 360;
     setRotation(newRotation);
-    
-    if (isSpinning) {
+
+    if (isSpinningRef.current) {
       animationRef.current = requestAnimationFrame(animateSpin);
     }
-  };
+  }, []);
 
-  const stopSpinToOrigin = () => {
-    // Calculate next multiple of 360
-    const currentRotation = rotation;
+  const stopSpinToOrigin = React.useCallback(() => {
+    // Read from the ref, not state — state is batched and can be many frames stale
+    const currentRotation = lastRotationRef.current;
     const nextMultiple = Math.ceil(currentRotation / 360) * 360;
     const remaining = nextMultiple - currentRotation;
-    
-    // Animate to next multiple of 360
-    const duration = (remaining / 360) * 2000; // Proportional to remaining distance
+
+    if (remaining <= 0) {
+      lastRotationRef.current = nextMultiple;
+      setRotation(nextMultiple);
+      return;
+    }
+
+    const duration = (remaining / 360) * 2000;
     const startRotation = currentRotation;
     const startTime = performance.now();
-    
+
     const finishSpin = (timestamp: number) => {
       const elapsed = timestamp - startTime;
       const progress = Math.min(elapsed / duration, 1);
-      
-      // Ease out animation
       const easeProgress = 1 - Math.pow(1 - progress, 3);
-      const currentRot = startRotation + (remaining * easeProgress);
-      
-      setRotation(currentRot);
-      
-      if (progress < 1) {
-        requestAnimationFrame(finishSpin);
-      } else {
-        setRotation(nextMultiple);
-        setIsSpinning(false);
-      }
-    };
-    
-    if (remaining > 0) {
-      requestAnimationFrame(finishSpin);
-    } else {
-      setRotation(nextMultiple);
-      setIsSpinning(false);
-    }
-  };
+      const currentRot = startRotation + remaining * easeProgress;
 
-  React.useEffect(() => {
-    if (isSpinning) {
-      startTimeRef.current = 0;
-      lastRotationRef.current = rotation;
-      animationRef.current = requestAnimationFrame(animateSpin);
-    } else {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
+      lastRotationRef.current = currentRot;
+      setRotation(currentRot);
+
+      if (progress < 1) {
+        animationRef.current = requestAnimationFrame(finishSpin);
+      } else {
+        lastRotationRef.current = nextMultiple;
+        setRotation(nextMultiple);
         animationRef.current = null;
       }
-    }
-    
-    return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
     };
-  }, [isSpinning]);
+
+    animationRef.current = requestAnimationFrame(finishSpin);
+  }, []);
+
+  const stopSpinning = React.useCallback(() => {
+    isSpinningRef.current = false;
+    if (animationRef.current) {
+      cancelAnimationFrame(animationRef.current);
+      animationRef.current = null;
+    }
+    stopSpinToOrigin();
+  }, [stopSpinToOrigin]);
 
   const handleLogoClick = () => {
     if (isPlaying) {
-      // Stop music immediately
       audioRef.current?.pause();
-      if (audioRef.current) {
-        audioRef.current.currentTime = 0;
-      }
+      if (audioRef.current) audioRef.current.currentTime = 0;
       setIsPlaying(false);
-      
-      // Stop spinning and return to origin
+      stopSpinning();
+    } else {
+      if (!audioRef.current) {
+        audioRef.current = new Audio();
+        audioRef.current.src = bgMusic;
+        audioRef.current.loop = true;
+
+        audioRef.current.addEventListener('ended', () => {
+          setIsPlaying(false);
+          stopSpinning();
+        });
+      }
+
+      audioRef.current.currentTime = 0;
+      audioRef.current?.play().catch(err => console.log('Audio play failed:', err));
+      setIsPlaying(true);
+
+      // Cancel any in-progress deceleration before starting fresh
       if (animationRef.current) {
         cancelAnimationFrame(animationRef.current);
         animationRef.current = null;
       }
-      stopSpinToOrigin();
-    } else {
-      // Start music
-      if (!audioRef.current) {
-        // Note: YouTube videos cannot be directly embedded as audio sources
-        // You'll need to provide a direct MP3/audio file URL
-        // For demonstration, using a placeholder URL
-        audioRef.current = new Audio();
-        // Replace this with your actual audio file URL
-        audioRef.current.src = bgMusic;
-        audioRef.current.loop = true; // Enable looping
-        
-        // Add event listeners
-        audioRef.current.addEventListener('ended', () => {
-          setIsPlaying(false);
-          if (animationRef.current) {
-            cancelAnimationFrame(animationRef.current);
-            animationRef.current = null;
-          }
-          stopSpinToOrigin();
-        });
-      }
-      
-      audioRef.current.currentTime = 0;
-      audioRef.current?.play().catch(err => console.log('Audio play failed:', err));
-      setIsPlaying(true);
-      setIsSpinning(true);
+      isSpinningRef.current = true;
+      startTimeRef.current = 0;
+      animationRef.current = requestAnimationFrame(animateSpin);
     }
   };
 
